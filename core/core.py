@@ -136,7 +136,7 @@ class Core(object):
         # Set paths
         atlas_t1 = "/app/atlas/mni_icbm152_atlas_t1.nii.gz"
         atlas_labels = "/app/atlas/mni_icbm152_atlas_t1.nii.gz"
-        atlas_labels_out = os.path.join(self.interim_dir, "mni_icbm152_labels_subjectspace.nii")
+        atlas_labels_out = os.path.join(self.interim_dir, "mni_icbm152_labels_subjectspace.nii.gz")
         brainstem_seg = os.path.join(self.interim_dir, "brainstem", "brainstem_bin.nii.gz")
         
         # Register atlas T1 to subject T1 space
