@@ -134,8 +134,8 @@ class Core(object):
             https://doi.org/10.1038/s41597-020-00564-0
         """
         # Set paths
-        atlas_t1 = "/app/atlas/mni_icbm152_atlas_t1.nii"
-        atlas_labels = "/app/atlas/mni_icbm152_atlas_t1.nii"
+        atlas_t1 = "/app/atlas/mni_icbm152_atlas_t1.nii.gz"
+        atlas_labels = "/app/atlas/mni_icbm152_atlas_t1.nii.gz"
         atlas_labels_out = os.path.join(self.interim_dir, "mni_icbm152_labels_subjectspace.nii")
         brainstem_seg = os.path.join(self.interim_dir, "brainstem", "brainstem_bin.nii.gz")
         
