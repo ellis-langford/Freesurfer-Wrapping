@@ -377,7 +377,7 @@ class Core(object):
 
         # Create region binary files
         self.helpers.plugin_log(f"Creating region binary files")
-        regions = ["brainstem", "cerebellum_L", "cerebellum_L",
+        regions = ["brainstem", "cerebellum_L", "cerebellum_R",
                    "cerebellumWM_L", "cerebellumWM_R", "ventricles"]
         for region in regions:
             self.binarise(region)
@@ -392,7 +392,7 @@ class Core(object):
 
         # Create other ROI geometries
         self.helpers.plugin_log(f"Creating region surface files")
-        regions = ["brainstem_L", "brainstem_R", "cerebellum_L", "cerebellum_L",
+        regions = ["brainstem_L", "brainstem_R", "cerebellum_L", "cerebellum_R",
                    "cerebellumWM_L", "cerebellumWM_R", "ventricles"]
         for region in regions:
             self.prepare_geometry(region)
