@@ -77,11 +77,10 @@ After running these commands, the FreeSurfer Wrapping pipeline will be run accor
    > *large_FOV:* Use if subject has a field of view > 256. Default is False.<br>
    > *optional_flags:* String of comma seperated flags to include in command.<br>
 2. `Convert segmentation to NIfTI`: Convert aseg.mgz to aseg.nii.gz.
-3. `Generate cerebrum surface files`: Generate surface files for cerebrum/cerebrumWM left/right
-4. `Binarise region labels`: Create region speicifc segmentations by selecting label indicies
-5. `Register atlas labels to subject space`: Register MNI-ICMB152 atlas labels to subject space
-6. `Split brainstem labels`: Split brainstem labels into left and right aided by atlas
-7. `Generate regional surface files`: Tesselate, smooth and convert to .stl for brainstem, cerebellum, cerebellumWM and ventricles
+3. `Binarise region labels`: Create region speicifc segmentations by selecting label indicies
+4. `Register atlas labels to subject space`: Register MNI-ICMB152 atlas labels to subject space
+5. `Split brainstem labels`: Split brainstem labels into left and right aided by atlas
+6. `Generate regional surface files`: Tesselate, smooth and convert to .stl for cerebrum, cerebrumWM, brainstem, cerebellum, cerebellumWM and ventricles
 
 ## Data Preparation
 

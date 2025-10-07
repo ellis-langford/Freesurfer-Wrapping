@@ -64,6 +64,8 @@ class Core(object):
 
         # Define image and log paths
         seg = os.path.join(self.output_dir, "mri", "aseg.mgz")
+        talxfm = os.path.join(self.output_dir, "mri", "transforms", "talairach.xfm")
+        orig = os.path.join(self.output_dir, "mri", "orig.mgz")
         self.seg_out  = os.path.join(self.output_dir, "mri", "aseg.nii.gz")
         conversion_log = os.path.join(self.log_dir, "aseg_conversion.log")
 
@@ -71,6 +73,7 @@ class Core(object):
         with open(conversion_log, "w") as outfile:
             subprocess.run(["bash", "-c",
                             self.freesurfer_source + "mri_convert " +
+                            f"--apply-transform {talxfm} --like {orig} "
                             f"{seg} {self.seg_out}"],
                             stdout=outfile,
                             stderr=subprocess.STDOUT,
@@ -78,10 +81,10 @@ class Core(object):
             
         # Check if conversion successful
         if not os.path.exists(self.seg_out):
-            self.helpers.errors("Conversion of aseg.mgz to aseg.nii.gz failed - " +
+            self.helpers.errors("Conversion of aseg.mgz to surface-space aseg.nii.gz failed - " +
                                f"please check log file at {conversion_log}")
         else:
-            self.helpers.verbose_log("Conversion of aseg.mgz to nii successful")
+            self.helpers.verbose_log("Conversion of aseg.mgz to surface-space nii successful")
         
         return
 
@@ -98,11 +101,20 @@ class Core(object):
         binarise_log = os.path.join(self.log_dir, f"binarise.log")
 
         labels = {"ventricles"     : "24 4 5 14 15 43 44 213",
-                  "cerebellum_L"   : "8",
-                  "cerebellum_R"   : "47",
+                  "cerebellum_L"   : "6 7 8",
+                  "cerebellum_R"   : "45 46 47",
                   "cerebellumWM_L" : "7",
                   "cerebellumWM_R" : "46",
-                  "brainstem"      : "16 170 171 172 173 174 175 177 178 179 71000 71010"}
+                  "brainstem"      : "16 170 171 172 173 174 175 177 178 179 71000 71010",
+                  "cerebrum_L"     : "2 3 10 11 12 13 17 18 19 20 26 28",
+                  "cerebrum_R"     : "41 42 49 50 51 52 53 54 55 56 58 60",
+                  "cerebrumWM_L"   : "2 78",
+                  "cerebrumWM_R"   : "41 79",
+                  "global"         : "6 7 8 16 45 46 47 192 "
+                                     "24 4 5 14 15 43 44 213 "
+                                     "2 3 10 11 12 13 17 18 19 20 26 28 "
+                                     "41 42 49 50 51 52 53 54 55 56 58 60"
+                 }
 
         # Convert
         with open(binarise_log, "w") as outfile:
@@ -290,18 +302,7 @@ class Core(object):
         Converts geometry file to .stl
         """
         self.helpers.verbose_log(f"Converting {region} to .stl")
-        paths = {
-            "cerebrum_L" : os.path.join(self.output_dir, "surf", "lh.pial"),
-            "cerebrum_R" : os.path.join(self.output_dir, "surf", "rh.pial"),
-            "cerebrumWM_L" : os.path.join(self.output_dir, "surf", "lh.smoothwm"),
-            "cerebrumWM_R" : os.path.join(self.output_dir, "surf", "rh.smoothwm")
-        }
-
-        # Define input images
-        if region in paths:
-            input_im = paths[region]
-        else:
-            input_im = os.path.join(self.interim_dir, f"{region}", "smooth")
+        input_im = os.path.join(self.interim_dir, f"{region}", "smooth")
 
         # Define output and log paths
         geo_out = os.path.join(self.geo_dir, f"{region}.stl")
@@ -366,19 +367,16 @@ class Core(object):
         self.run_freesurfer()
 
         # Convert aseg file to NIfTI
-        self.helpers.plugin_log("Converting aseg file to NIfTI")
+        self.helpers.plugin_log("Converting aseg file to NIfTI in surface space")
         self.convert_seg()
-
-        # Create cerebrum geometry
-        self.helpers.plugin_log("Creating cerebrum surface files")
-        regions = ["cerebrum_L", "cerebrum_R", "cerebrumWM_L", "cerebrumWM_R"]
-        for region in regions:
-            self.convert_to_stl(region)
 
         # Create region binary files
         self.helpers.plugin_log(f"Creating region binary files")
-        regions = ["brainstem", "cerebellum_L", "cerebellum_R",
-                   "cerebellumWM_L", "cerebellumWM_R", "ventricles"]
+        regions = ["cerebrum_L", "cerebrum_R", 
+                   "cerebrumWM_L", "cerebrumWM_R",
+                   "cerebellum_L", "cerebellum_R",
+                   "cerebellumWM_L", "cerebellumWM_R",
+                   "brainstem", "ventricles", "global"]
         for region in regions:
             self.binarise(region)
 
@@ -392,8 +390,12 @@ class Core(object):
 
         # Create other ROI geometries
         self.helpers.plugin_log(f"Creating region surface files")
-        regions = ["brainstem_L", "brainstem_R", "cerebellum_L", "cerebellum_R",
-                   "cerebellumWM_L", "cerebellumWM_R", "ventricles"]
+        regions = ["cerebrum_L", "cerebrum_R", 
+                   "cerebrumWM_L", "cerebrumWM_R",
+                   "cerebellum_L", "cerebellum_R",
+                   "cerebellumWM_L", "cerebellumWM_R",
+                   "brainstem_L", "brainstem_R",
+                   "ventricles", "global"]
         for region in regions:
             self.prepare_geometry(region)
 
