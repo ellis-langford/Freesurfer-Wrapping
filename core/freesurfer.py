@@ -119,6 +119,7 @@ class Freesurfer(BaseCog):
 
         # Complete
         self.helpers.plugin_log(f"{self.config['NAME']} completed at {self.helpers.now_time()}")
+        self.helpers.log_success()
 
 # Set off pipeline object
 if __name__ == "__main__":

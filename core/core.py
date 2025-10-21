@@ -5,6 +5,7 @@ import subprocess
 import nibabel as nib
 import numpy as np
 import ants
+import trimesh
 
 class Core(object):
     """
@@ -64,8 +65,6 @@ class Core(object):
 
         # Define image and log paths
         seg = os.path.join(self.output_dir, "mri", "aseg.mgz")
-        talxfm = os.path.join(self.output_dir, "mri", "transforms", "talairach.xfm")
-        orig = os.path.join(self.output_dir, "mri", "orig.mgz")
         self.seg_out  = os.path.join(self.output_dir, "mri", "aseg.nii.gz")
         conversion_log = os.path.join(self.log_dir, "aseg_conversion.log")
 
@@ -73,7 +72,6 @@ class Core(object):
         with open(conversion_log, "w") as outfile:
             subprocess.run(["bash", "-c",
                             self.freesurfer_source + "mri_convert " +
-                            f"--apply-transform {talxfm} --like {orig} "
                             f"{seg} {self.seg_out}"],
                             stdout=outfile,
                             stderr=subprocess.STDOUT,
@@ -305,7 +303,7 @@ class Core(object):
         input_im = os.path.join(self.interim_dir, f"{region}", "smooth")
 
         # Define output and log paths
-        geo_out = os.path.join(self.geo_dir, f"{region}.stl")
+        geo_out = os.path.join(self.interim_dir, f"{region}", f"{region}.stl")
         conversion_log = os.path.join(self.log_dir, f"{region}_conversion.log")
 
         # Convert
@@ -326,9 +324,46 @@ class Core(object):
         
         return
 
+    def clean_stl(self, region):
+        """
+        Fix issues in stl file (e.g. non-normal orientations)
+        """
+        self.helpers.verbose_log(f"Cleaning {region} .stl")
+        input_im = os.path.join(self.interim_dir, f"{region}", f"{region}.stl")
+
+        # Define output and log paths
+        geo_out = os.path.join(self.geo_dir, f"{region}.stl")
+
+        # Clean
+        mesh = trimesh.load(input_im) # Load mesh
+        components = mesh.split(only_watertight=False) # Split into connected components
+        largest = max(components, key=lambda c: c.area) # Keep largest shell
+        
+        # Remove small disconnected patches
+        cleaned_components = [
+            c for c in components if c.area > 0.05 * largest.area
+        ]
+        
+        mesh_clean = trimesh.util.concatenate(cleaned_components)
+        
+        # Fill holes
+        if not mesh_clean.is_watertight:
+            mesh_clean.fill_holes()
+        
+        # Export cleaned STL
+        mesh_clean.export(geo_out)
+            
+        # Check if conversion successful
+        if not os.path.exists(geo_out):
+            self.helpers.errors(f"Cleaning of {region} .stl failed")
+        else:
+            self.helpers.verbose_log(f"Cleaning of {region} .stl successful")
+        
+        return
+
     def prepare_geometry(self, region):
         """
-        Binarises, tessellates, smooths and converts volume to .stl
+        Binarises, tessellates, smooths, converts and cleans volume to .stl
         """
         self.helpers.verbose_log(f"Preparing {region} geometry")
 
@@ -336,14 +371,16 @@ class Core(object):
         self.tessellate(region)
         self.smooth(region)
         self.convert_to_stl(region)
+        self.clean_stl(region)
 
         # Define expected outputs
         surf_out = os.path.join(self.interim_dir, f"{region}", "surf")
         smooth_out = os.path.join(self.interim_dir, f"{region}", "smooth")
+        conv_out = os.path.join(self.interim_dir, f"{region}", f"{region}.stl")
         geo_out = os.path.join(self.geo_dir, f"{region}.stl")
             
         # Check if geometry generation successful
-        outputs = [surf_out, smooth_out, geo_out]
+        outputs = [surf_out, smooth_out, conv_out, geo_out]
         for output in outputs:
             if not os.path.exists(output):
                 self.helpers.errors(f"Geometry generation failed - " +
@@ -400,5 +437,6 @@ class Core(object):
             self.prepare_geometry(region)
 
         self.helpers.plugin_log(f"Core analysis completed at {self.helpers.now_time()}")
+        self.helpers.log_success()
 
         return
