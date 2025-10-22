@@ -38,15 +38,43 @@ class Freesurfer(BaseCog):
         """
         Check inputs and copy to working directory.
         """
-        # Check for valid input image and copy
         input_im = self.get_parameter("input_im")
-        if not os.path.isfile(input_im):
-            self.helpers.errors(f"No valid image found at {input_im}")
+        freesurfer_outputs = self.get_parameter("freesurfer_outputs")
+        segmentations = self.get_parameter("segmentations")
+        regions = self.get_parameter("regions")
+        
+        # Check for valid inputs and copy
+        # Run full FreeSurfer pipeline
+        if input_im:
+            if not os.path.isfile(input_im):
+                self.helpers.errors(f"No valid image found at {input_im}")
+            else:
+                self.utils.copy(input_im, os.path.join(self.image_dir, "image.nii.gz"))
+        # Post processing only
+        elif freesurfer_outputs:
+            if not os.path.isdir(freesurfer_outputs):
+                self.helpers.errors(f"No valid Freesurfer output directory found at {freesurfer_outputs}")
+            else:
+                shutil.copytree(freesurfer_outputs, os.path.join(self.base_dir, "fs_outputs", self.subject_id))
+        # Post processing of segmentations only
+        elif segmentations:
+            segmentation_paths = segmentations.split(",")
+            regions = regions.split(",")
+            for region in regions:
+                path = next((p for p in segmentation_paths if region in os.path.basename(p)), None)
+                if not path:
+                    self.helpers.errors(f"No matching path in segmentations found for {region}")
+                elif not os.path.isfile(path):
+                    self.helpers.errors(f"No valid segmentation found at {path}")
+                else:
+                    self.utils.copy(path, os.path.join(self.image_dir, f"{region}_bin.nii.gz"))
         else:
-            self.utils.copy(input_im, os.path.join(self.image_dir, "image.nii.gz"))
+            self.helpers.errors(f"A T1, directory containing Freesurfer outputs or "
+                                f"binary segmentation .nii.gz image must be provided")
             
         # Assign variables
-        self.input_im = os.path.join(self.image_dir, "image.nii.gz")
+        self.input_im = os.path.join(self.image_dir, "image.nii.gz") if input_im else None
+        self.freesurfer_outputs = os.path.join(self.base_dir, "fs_outputs", self.subject_id) if freesurfer_outputs else None
 
         return
 
@@ -91,12 +119,12 @@ class Freesurfer(BaseCog):
         # Directories
         self.image_dir     = os.path.join(self.base_dir, "inputs")
         self.interim_dir   = os.path.join(self.base_dir, "interim")
-        self.geo_dir       = os.path.join(self.base_dir, "outputs")
+        self.output_dir       = os.path.join(self.base_dir, "outputs")
         self.fs_output_dir = os.path.join(self.base_dir, "fs_outputs")
-        self.output_dir    = os.path.join(self.base_dir, "fs_outputs", self.subject_id)
+        self.fs_outputs    = os.path.join(self.base_dir, "fs_outputs", self.subject_id)
         self.log_dir   = os.path.join(self.base_dir, "logs")
 
-        for _dir in [self.image_dir, self.interim_dir, self.geo_dir, 
+        for _dir in [self.image_dir, self.interim_dir, self.output_dir, 
                      self.fs_output_dir, self.log_dir]:
             shutil.rmtree(_dir, ignore_errors=True)
             os.makedirs(_dir, exist_ok=True)

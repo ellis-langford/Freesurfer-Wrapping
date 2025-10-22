@@ -6,6 +6,7 @@ import nibabel as nib
 import numpy as np
 import ants
 import trimesh
+import shutil
 
 class Core(object):
     """
@@ -14,9 +15,10 @@ class Core(object):
     def __init__(self, plugin_obj):
         # Check all expected attributed are present
         to_inherit = ["config", "utils", "helpers", "parameters",
-                      "base_dir", "output_dir", "image_dir", "log_dir",
-                      "interim_dir", "geo_dir", "subject_id", 
-                      "input_im", "freesurfer_command",
+                      "base_dir", "fs_outputs", "output_dir", 
+                      "image_dir", "log_dir", "interim_dir", 
+                      "subject_id", "input_im", 
+                      "freesurfer_outputs", "freesurfer_command",
                       "freesurfer_source", "freesurfer_env"]
         for attr in to_inherit:
             try:
@@ -44,8 +46,8 @@ class Core(object):
                                 f"please check log file at {self.freesurfer_log}")
 
         # Check required outputs have been produced
-        segmentation = os.path.join(self.output_dir, "mri", "aseg.mgz")
-        output_im    = os.path.join(self.output_dir, "mri", "T1.mgz")
+        segmentation = os.path.join(self.fs_outputs, "mri", "aseg.mgz")
+        output_im    = os.path.join(self.fs_outputs, "mri", "T1.mgz")
         if not os.path.exists(segmentation):
             self.helpers.errors(f"Freesurfer has not produced a segmentation at {segmentation}" +
                                 f"- please check log file at {self.freesurfer_log}")
@@ -57,6 +59,36 @@ class Core(object):
             
         return
 
+    def convert_T1(self):
+        """
+        Convert freesurfer T1.mgz to .nii.gz
+        """
+        self.helpers.verbose_log("Converting T1.mgz to T1.nii.gz")
+
+        # Define image and log paths
+        T1 = os.path.join(self.fs_outputs, "mri", "T1.mgz")
+        self.T1_out  = os.path.join(self.fs_outputs, "mri", "T1.nii.gz")
+        conversion_log = os.path.join(self.log_dir, "T1_conversion.log")
+
+        # Convert
+        with open(conversion_log, "w") as outfile:
+            subprocess.run(["bash", "-c",
+                            self.freesurfer_source + "mri_convert " +
+                            f"{T1} {self.T1_out}"],
+                            stdout=outfile,
+                            stderr=subprocess.STDOUT,
+                            env=self.freesurfer_env)
+            
+        # Check if conversion successful
+        if not os.path.exists(self.T1_out):
+            self.helpers.errors("Conversion of T1.mgz to T1.nii.gz failed - " +
+                               f"please check log file at {conversion_log}")
+        else:
+            shutil.copy(self.T1_out, os.path.join(self.output_dir, "T1.nii.gz"))
+            self.helpers.verbose_log("Conversion of T1.mgz to T1.nii.gz successful")
+        
+        return
+
     def convert_seg(self):
         """
         Convert freesurfer aseg.mgz to .nii.gz
@@ -64,8 +96,8 @@ class Core(object):
         self.helpers.verbose_log("Converting aseg.mgz to aseg.nii.gz")
 
         # Define image and log paths
-        seg = os.path.join(self.output_dir, "mri", "aseg.mgz")
-        self.seg_out  = os.path.join(self.output_dir, "mri", "aseg.nii.gz")
+        seg = os.path.join(self.fs_outputs, "mri", "aseg.mgz")
+        self.seg_out  = os.path.join(self.fs_outputs, "mri", "aseg.nii.gz")
         conversion_log = os.path.join(self.log_dir, "aseg_conversion.log")
 
         # Convert
@@ -79,10 +111,10 @@ class Core(object):
             
         # Check if conversion successful
         if not os.path.exists(self.seg_out):
-            self.helpers.errors("Conversion of aseg.mgz to surface-space aseg.nii.gz failed - " +
+            self.helpers.errors("Conversion of aseg.mgz to aseg.nii.gz failed - " +
                                f"please check log file at {conversion_log}")
         else:
-            self.helpers.verbose_log("Conversion of aseg.mgz to surface-space nii successful")
+            self.helpers.verbose_log("Conversion of aseg.mgz to aseg.nii.gz successful")
         
         return
 
@@ -93,7 +125,7 @@ class Core(object):
         self.helpers.verbose_log(f"Binarising {region} segmentation")
 
         # Define image and log paths
-        subcortical_seg = os.path.join(self.output_dir, "mri", "aseg.nii.gz")
+        subcortical_seg = os.path.join(self.fs_outputs, "mri", "aseg.nii.gz")
         bin_out  = os.path.join(self.interim_dir, f"{region}", f"{region}_bin.nii.gz")
         os.makedirs(os.path.join(self.interim_dir, region), exist_ok=True)
         binarise_log = os.path.join(self.log_dir, f"binarise.log")
@@ -108,7 +140,7 @@ class Core(object):
                   "cerebrum_R"     : "41 42 49 50 51 52 53 54 55 56 58 60",
                   "cerebrumWM_L"   : "2 78",
                   "cerebrumWM_R"   : "41 79",
-                  "global"         : "6 7 8 16 45 46 47 192 "
+                  "wholebrain"     : "6 7 8 16 45 46 47 192 "
                                      "24 4 5 14 15 43 44 213 "
                                      "2 3 10 11 12 13 17 18 19 20 26 28 "
                                      "41 42 49 50 51 52 53 54 55 56 58 60"
@@ -148,14 +180,15 @@ class Core(object):
         atlas_labels = "/app/atlas/mni_icbm152_atlas_t1.nii.gz"
         atlas_labels_out = os.path.join(self.interim_dir, "mni_icbm152_labels_subjectspace.nii.gz")
         brainstem_seg = os.path.join(self.interim_dir, "brainstem", "brainstem_bin.nii.gz")
+        input_image = self.input_im if self.input_im else os.path.join(self.fs_outputs, "mri", "T1.nii.gz")
         
         # Register atlas T1 to subject T1 space
-        registration = ants.registration(fixed=ants.image_read(self.input_im), 
+        registration = ants.registration(fixed=ants.image_read(input_image), 
                                          moving=ants.image_read(atlas_t1), 
                                          type_of_transform="Affine")
 
         # Apply transform to atlas labels
-        transformed_labels = ants.apply_transforms(fixed=ants.image_read(self.input_im),
+        transformed_labels = ants.apply_transforms(fixed=ants.image_read(input_image),
                                                    moving=ants.image_read(atlas_labels),
                                                    transformlist=[registration["fwdtransforms"][0]],
                                                    interpolator="nearestNeighbor")
@@ -332,7 +365,7 @@ class Core(object):
         input_im = os.path.join(self.interim_dir, f"{region}", f"{region}.stl")
 
         # Define output and log paths
-        geo_out = os.path.join(self.geo_dir, f"{region}.stl")
+        geo_out = os.path.join(self.output_dir, f"{region}.stl")
 
         # Clean
         mesh = trimesh.load(input_im) # Load mesh
@@ -377,7 +410,7 @@ class Core(object):
         surf_out = os.path.join(self.interim_dir, f"{region}", "surf")
         smooth_out = os.path.join(self.interim_dir, f"{region}", "smooth")
         conv_out = os.path.join(self.interim_dir, f"{region}", f"{region}.stl")
-        geo_out = os.path.join(self.geo_dir, f"{region}.stl")
+        geo_out = os.path.join(self.output_dir, f"{region}.stl")
             
         # Check if geometry generation successful
         outputs = [surf_out, smooth_out, conv_out, geo_out]
@@ -390,6 +423,27 @@ class Core(object):
         
         return
 
+    def generate_global_surface(self):
+        """
+        Generate global mesh file
+        (all regions minus ventricles)
+        """
+        # Load global binary and ventricle mask
+        wholebrain_seg = nib.load(os.path.join(self.interim_dir, "wholebrain", "wholebrain_bin.nii.gz"))
+        vent_seg = nib.load(os.path.join(self.interim_dir, "ventricles", "ventricles_bin.nii.gz"))
+        wholebrain_data = wholebrain_seg.get_fdata()
+        vent_data = vent_seg.get_fdata()
+    
+        # Subtract ventricles (make sure masks are binary)
+        result_data = np.where((wholebrain_data > 0) & (vent_data == 0), 1, 0)
+    
+        # Step 4: Save result
+        result_img = nib.Nifti1Image(result_data.astype(np.uint8), affine=wholebrain_seg.affine)
+        os.makedirs(os.path.join(self.interim_dir, "global"), exist_ok=True)
+        result_out_fpath = os.path.join(self.interim_dir, "global", "global_bin.nii.gz")
+        nib.save(result_img, result_out_fpath)
+
+
     def run(self):
         """
         Begin core processing.
@@ -398,43 +452,59 @@ class Core(object):
 
         # Record parameters
         self.helpers.log_options(self.parameters)
+        regions = self.parameters["regions"].split(",")
 
         # Run Freesurfer
-        self.helpers.plugin_log("Running Freesurfer")
-        self.run_freesurfer()
+        if self.input_im:
+            self.helpers.plugin_log("Running Freesurfer")
+            self.run_freesurfer()
 
-        # Convert aseg file to NIfTI
-        self.helpers.plugin_log("Converting aseg file to NIfTI in surface space")
-        self.convert_seg()
+        if not self.parameters["segmentations"]:
+            # Convert aseg file to NIfTI
+            self.helpers.plugin_log("Converting aseg and T1 file to NIfTI")
+            self.convert_seg()
+            self.convert_T1()
 
-        # Create region binary files
-        self.helpers.plugin_log(f"Creating region binary files")
-        regions = ["cerebrum_L", "cerebrum_R", 
-                   "cerebrumWM_L", "cerebrumWM_R",
-                   "cerebellum_L", "cerebellum_R",
-                   "cerebellumWM_L", "cerebellumWM_R",
-                   "brainstem", "ventricles", "global"]
-        for region in regions:
-            self.binarise(region)
+            # Create region binary files
+            self.helpers.plugin_log("Creating region binary files")
+            
+            # Join brainstem label - split in later steps
+            if "brainstem_L" in regions or "brainstem_R" in regions:
+                binarise_regions = [r for r in regions if r not in ("brainstem_L", "brainstem_R")]
+                binarise_regions.append("brainstem")
 
-        # Register MNI-ICBM152 atlas labels to subject space
-        self.helpers.plugin_log("Registering atlas labels to subject space")
-        self.register_mni_atlas()
+            # Process regions
+            for region in binarise_regions:
+                self.binarise(region)
+    
+            # Register MNI-ICBM152 atlas labels to subject space
+            self.helpers.plugin_log("Registering atlas labels to subject space")
+            self.register_mni_atlas()
+    
+            # Split the brainstem into L&R
+            self.helpers.plugin_log("Splitting brainstem into L&R")
+            self.split_brainstem()
 
-        # Split the brainstem into L&R
-        self.helpers.plugin_log("Splitting brainstem into L&R")
-        self.split_brainstem()
+        else:
+            for region in regions:
+                self.utils.copy(os.path.join(self.image_dir, f"{region}_bin.nii.gz"),
+                                os.path.join(self.interim_dir, region, f"{region}_bin.nii.gz"))
 
         # Create other ROI geometries
         self.helpers.plugin_log(f"Creating region surface files")
-        regions = ["cerebrum_L", "cerebrum_R", 
-                   "cerebrumWM_L", "cerebrumWM_R",
-                   "cerebellum_L", "cerebellum_R",
-                   "cerebellumWM_L", "cerebellumWM_R",
-                   "brainstem_L", "brainstem_R",
-                   "ventricles", "global"]
         for region in regions:
-            self.prepare_geometry(region)
+            if self.parameters["segmentations"]:
+                self.prepare_geometry(region)
+            else:
+                 if region not in ["wholebrain", "ventricles"]:
+                     self.prepare_geometry(region)
+
+        # If segmentation mode with both wholebrain and ventricles in region
+        # list, create global segmentation (all minus ventricles)
+        if self.parameters["segmentations"]:
+            if "wholebrain" in regions and "ventricles" in regions:
+                self.generate_global_surface()
+                self.prepare_geometry("global")
 
         self.helpers.plugin_log(f"Core analysis completed at {self.helpers.now_time()}")
         self.helpers.log_success()

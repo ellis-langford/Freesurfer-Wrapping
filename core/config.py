@@ -1,7 +1,7 @@
 NAME                           = "Freesurfer"
 VERSION                        = 1
 CONTRIBUTORS                   = ["ellis.langford.19@ucl.ac.uk"]
-LAST_MOD_DATE                  = "29.09.2025"
+LAST_MOD_DATE                  = "22.10.2025"
 VERBOSE                        = False
 
 PARAMETERS = {
@@ -11,13 +11,33 @@ PARAMETERS = {
         },
         "input_im" : {
             "type"    : str,
-            "help"    : "Path to a NIfTI image to be analysed."
+            "default" : "",
+            "help"    : "Path to a T1 NIfTI image to be analysed."
         },
         "props_fpath" : {
             "type"       : str,
             "type_addit" : "json",
             "default"    : "",
             "help"       : "Path to a JSON-format plugin properties file (optional)."
+        },
+        "regions" : {
+            "type"       : str,
+            "default"    : "cerebrum_L,cerebrum_R,cerebrumWM_L,cerebrumWM_R," +
+                           "cerebellum_L,cerebellum_R,cerebellumWM_L,cerebellumWM_R," +
+                           "brainstem_L,brainstem_R,ventricles,wholebrain",
+            "help"       : "Comma seperated list of regions to process. "
+        },
+        "freesurfer_outputs" : {
+            "type"       : str,
+            "default"    : "",
+            "help"       : "Path to freesurfer outputs directory. " +
+                           "Default is none."
+        },
+        "segmentations" : {
+            "type"       : str,
+            "default"    : "",
+            "help"       : "List of comma seperated paths to segmentations to process. " +
+                           "Default is none."
         },
         "optional_flags" : {
             "type"       : str,
